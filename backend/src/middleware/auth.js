@@ -1,13 +1,28 @@
 const jwt = require('jsonwebtoken');
+const { pool } = require('../db');
 const { permissionsForRole } = require('../rolePermissions');
+require('dotenv').config();
 
-// This middleware stands in for ARGO's platform authentication. Real ARGO
-// verifies its own platform-issued JWT the same way; this module never
-// implements its own login/session system, per the assessment constraint.
-//
-// CRITICAL: organization_id and user_id come ONLY from the verified token
-// claims. They are never read from req.body, req.query, or any header.
-function authenticate(req, res, next) {
+// Looks up this organization's actual permission grants for the role from
+// organization_role_permissions (editable via Settings > Roles &
+// Permissions). Falls back to the hardcoded ROLE_PERMISSIONS defaults if
+// the org has no rows yet for this role — covers orgs seeded before
+// Settings existed, or a role whose defaults were never customized.
+async function permissionsForOrgRole(organizationId, role) {
+  const result = await pool.query(
+    `SELECT permission FROM organization_role_permissions
+     WHERE organization_id = $1 AND role = $2`,
+    [organizationId, role]
+  );
+
+  if (result.rows.length === 0) {
+    return permissionsForRole(role);
+  }
+
+  return result.rows.map(r => r.permission);
+}
+
+async function authenticate(req, res, next) {
   const header = req.headers.authorization || '';
   const [scheme, token] = header.split(' ');
 
@@ -16,23 +31,29 @@ function authenticate(req, res, next) {
   }
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     const { sub: user_id, organization_id, role } = payload;
 
     if (!user_id || !organization_id || !role) {
       return res.status(401).json({ error: { code: 'UNAUTHENTICATED', message: 'Malformed token claims' } });
     }
 
+    const permissions = await permissionsForOrgRole(organization_id, role);
+
     req.auth = {
       user_id,
       organization_id,
       role,
-      permissions: permissionsForRole(role),
+      permissions,
     };
     next();
   } catch (err) {
-    return res.status(401).json({ error: { code: 'UNAUTHENTICATED', message: 'Invalid or expired token' } });
+    if (err instanceof jwt.JsonWebTokenError || err instanceof jwt.TokenExpiredError) {
+      return res.status(401).json({ error: { code: 'UNAUTHENTICATED', message: 'Invalid or expired token' } });
+    }
+    console.error('Auth lookup failed:', err);
+    return res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Authentication check failed' } });
   }
 }
 
-module.exports = { authenticate };
+module.exports = { authenticate, permissionsForOrgRole };

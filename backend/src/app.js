@@ -1,24 +1,40 @@
 const express = require('express');
 const cors = require('cors');
 const { authenticate } = require('./middleware/auth');
-const donationRoutes = require('./routes/donations');
-const donorRoutes = require('./routes/donors');
+const donationsRouter = require('./routes/donations');
+const donorsRouter = require('./routes/donors');
+const receiptsRouter = require('./routes/receipts');
+const organizationsRouter = require('./routes/organizations');
+const campaignsRouter = require('./routes/campaigns');
+const pledgesRouter = require('./routes/pledges');
+const settingsRouter = require('./routes/settings');
 
 function createApp() {
   const app = express();
-  app.use(cors());
+
   app.use(express.json());
+  app.use(cors({ origin: 'http://localhost:5173' }));
 
-  // Every route below is authenticated first — no route reads req.body's
-  // organization_id, ever. That value always comes from req.auth.
-  app.use('/api/donations', authenticate, donationRoutes);
-  app.use('/api/donors', authenticate, donorRoutes);
+  // Attach req.auth to all routes
+  app.use(authenticate);
 
-  app.get('/health', (req, res) => res.json({ status: 'ok' }));
+  // Routes
+  app.use('/api/donations', donationsRouter);
+  app.use('/api/donors', donorsRouter);
+  app.use('/api/receipts', receiptsRouter);
+  app.use('/api/organizations', organizationsRouter);
+  app.use('/api/campaigns', campaignsRouter);
+  app.use('/api/pledges', pledgesRouter);
+  app.use('/api/reports', require('./routes/reports'));
+  app.use('/api/settings', settingsRouter);
+  // 404 handler
+  app.use((req, res) => {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Endpoint not found' } });
+  });
 
-  // Centralized error handler — never leaks stack traces to the client
+  // Global error handler
   app.use((err, req, res, next) => {
-    console.error(err);
+    console.error('Unhandled error:', err);
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Something went wrong' } });
   });
 

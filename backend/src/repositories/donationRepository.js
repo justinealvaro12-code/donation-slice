@@ -1,12 +1,12 @@
 const { pool } = require('../db');
 
-async function create(organizationId, userId, { donor_id, amount, payment_channel, payment_reference, donation_date }) {
+async function create(organizationId, userId, { donor_id, campaign_id, pledge_id, amount, payment_channel, payment_reference, donation_date }) {
   const result = await pool.query(
-    `INSERT INTO donations
-       (organization_id, donor_id, amount, payment_channel, payment_reference, donation_date, status, created_by, updated_by)
-     VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $7)
+    `INSERT INTO donation_donations
+       (organization_id, donor_id, campaign_id, pledge_id, amount, payment_channel, payment_reference, donation_date, status, created_by, updated_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $9)
      RETURNING *`,
-    [organizationId, donor_id, amount, payment_channel, payment_reference || null, donation_date, userId]
+    [organizationId, donor_id, campaign_id || null, pledge_id || null, amount, payment_channel, payment_reference || null, donation_date, userId]
   );
   return result.rows[0];
 }
@@ -14,8 +14,8 @@ async function create(organizationId, userId, { donor_id, amount, payment_channe
 async function findById(organizationId, donationId) {
   const result = await pool.query(
     `SELECT d.*, r.id AS receipt_id, r.receipt_number, r.status AS receipt_status
-     FROM donations d
-     LEFT JOIN receipts r ON r.donation_id = d.id
+     FROM donation_donations d
+     LEFT JOIN donation_receipts r ON r.donation_id = d.id
      WHERE d.id = $1 AND d.organization_id = $2 AND d.deleted_at IS NULL`,
     [donationId, organizationId]
   );
@@ -38,22 +38,22 @@ async function list(organizationId, { page = 1, pageSize = 20, status, donor_id 
 
   params.push(pageSize, offset);
   const result = await pool.query(
-    `SELECT * FROM donations WHERE ${conditions.join(' AND ')}
+    `SELECT * FROM donation_donations WHERE ${conditions.join(' AND ')}
      ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
   return result.rows;
 }
 
-// Confirms a pending donation and issues its receipt in a single transaction,
-// so a donation can never end up "confirmed" without a receipt (or vice versa).
 async function confirm(organizationId, userId, donationId) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
+    // Lock just the donation row (no JOIN here)
     const donationResult = await client.query(
-      `SELECT * FROM donations WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL FOR UPDATE`,
+      `SELECT * FROM donation_donations 
+       WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL FOR UPDATE`,
       [donationId, organizationId]
     );
     const donation = donationResult.rows[0];
@@ -68,21 +68,31 @@ async function confirm(organizationId, userId, donationId) {
     }
 
     const updateResult = await client.query(
-      `UPDATE donations SET status = 'confirmed', updated_by = $1, updated_at = now()
+      `UPDATE donation_donations SET status = 'confirmed', updated_by = $1, updated_at = now()
        WHERE id = $2 RETURNING *`,
       [userId, donationId]
     );
 
-    const receiptNumber = `RCPT-${Date.now()}-${donationId.slice(0, 8)}`;
-    const receiptResult = await client.query(
-      `INSERT INTO receipts (organization_id, donation_id, receipt_number, issued_by, created_by, updated_by)
-       VALUES ($1, $2, $3, $4, $4, $4)
-       RETURNING *`,
-      [organizationId, donationId, receiptNumber, userId]
-    );
+    // Pledge fulfillment: a donation only counts toward a pledge once it's
+    // actually confirmed (not while pending). Locks the pledge row before
+    // updating so a simultaneous confirm on another donation against the
+    // same pledge can't race — same protection pattern as the donation
+    // row lock above.
+    if (donation.pledge_id) {
+      await client.query(
+        `SELECT id FROM donation_pledges WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL FOR UPDATE`,
+        [donation.pledge_id, organizationId]
+      );
+      await client.query(
+        `UPDATE donation_pledges
+         SET amount_fulfilled = GREATEST(amount_fulfilled + $1, 0), updated_by = $2, updated_at = now()
+         WHERE id = $3 AND organization_id = $4`,
+        [donation.amount, userId, donation.pledge_id, organizationId]
+      );
+    }
 
     await client.query('COMMIT');
-    return { donation: updateResult.rows[0], receipt: receiptResult.rows[0] };
+    return { donation: updateResult.rows[0] };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -92,13 +102,17 @@ async function confirm(organizationId, userId, donationId) {
 }
 
 async function voidDonation(organizationId, userId, donationId) {
+  // No pledge fulfillment reversal needed here: void only ever succeeds on
+  // a 'pending' donation (see WHERE clause below), and pending donations
+  // never incremented amount_fulfilled in the first place (that only
+  // happens in confirm()).
   const result = await pool.query(
-    `UPDATE donations SET status = 'void', updated_by = $1, updated_at = now()
+    `UPDATE donation_donations SET status = 'voided', updated_by = $1, updated_at = now()
      WHERE id = $2 AND organization_id = $3 AND status = 'pending' AND deleted_at IS NULL
      RETURNING *`,
     [userId, donationId, organizationId]
   );
-  return result.rows[0] || null; // null means not found OR invalid transition; caller distinguishes via a fresh lookup
+  return result.rows[0] || null;
 }
 
 async function refund(organizationId, userId, donationId) {
@@ -107,7 +121,7 @@ async function refund(organizationId, userId, donationId) {
     await client.query('BEGIN');
 
     const donationResult = await client.query(
-      `SELECT * FROM donations WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL FOR UPDATE`,
+      `SELECT * FROM donation_donations WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL FOR UPDATE`,
       [donationId, organizationId]
     );
     const donation = donationResult.rows[0];
@@ -122,13 +136,30 @@ async function refund(organizationId, userId, donationId) {
     }
 
     const updateResult = await client.query(
-      `UPDATE donations SET status = 'refunded', updated_by = $1, updated_at = now()
+      `UPDATE donation_donations SET status = 'refunded', updated_by = $1, updated_at = now()
        WHERE id = $2 RETURNING *`,
       [userId, donationId]
     );
 
+    // Reverse the fulfillment credit this donation added back at confirm
+    // time. Only 'confirmed' donations reach here (checked above), and
+    // confirm() is the only place that ever increments amount_fulfilled,
+    // so this subtraction always has a matching prior addition.
+    if (donation.pledge_id) {
+      await client.query(
+        `SELECT id FROM donation_pledges WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL FOR UPDATE`,
+        [donation.pledge_id, organizationId]
+      );
+      await client.query(
+        `UPDATE donation_pledges
+         SET amount_fulfilled = GREATEST(amount_fulfilled - $1, 0), updated_by = $2, updated_at = now()
+         WHERE id = $3 AND organization_id = $4`,
+        [donation.amount, userId, donation.pledge_id, organizationId]
+      );
+    }
+
     await client.query(
-      `UPDATE receipts SET status = 'voided', updated_by = $1, updated_at = now()
+      `UPDATE donation_receipts SET status = 'voided', updated_by = $1, updated_at = now()
        WHERE donation_id = $2 AND status = 'issued'`,
       [userId, donationId]
     );
@@ -143,4 +174,33 @@ async function refund(organizationId, userId, donationId) {
   }
 }
 
-module.exports = { create, findById, list, confirm, voidDonation, refund };
+async function softDelete(organizationId, userId, donationId) {
+  const result = await pool.query(
+    `UPDATE donation_donations SET deleted_at = now(), updated_by = $1, updated_at = now()
+     WHERE id = $2 AND organization_id = $3 AND deleted_at IS NULL
+     RETURNING *`,
+    [userId, donationId, organizationId]
+  );
+  return result.rows[0] || null;
+}
+
+async function voidReceipt(organizationId, userId, receiptId) {
+  const result = await pool.query(
+    `UPDATE donation_receipts SET status = 'voided', updated_by = $1, updated_at = now()
+     WHERE id = $2 AND organization_id = $3 AND status = 'issued' AND deleted_at IS NULL
+     RETURNING *`,
+    [userId, receiptId, organizationId]
+  );
+  return result.rows[0] || null;
+}
+
+module.exports = {
+  create,
+  findById,
+  list,
+  confirm,
+  voidDonation,
+  refund,
+  softDelete,
+  voidReceipt
+};

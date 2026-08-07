@@ -15,9 +15,7 @@ CREATE TABLE IF NOT EXISTS donation_donations (
     payment_reference VARCHAR(255),
     donation_date DATE NOT NULL,
 
-    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (
-        status IN ('pending', 'confirmed', 'refunded', 'void')
-    ),
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'refunded', 'voided')),
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     created_by UUID,

@@ -1,0 +1,30 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local testing / debugging files
+backend/body.json
+backend/body2.json
+backend/donation.json
+backend/donor.json
+backend/receipt1.json
+backend/receipt2.json
+backend/checkOrgs.js
+backend/listDonorColumns.js
+backend/listTables.js
+backend/listUsers.js
+backend/runPledgeMigration.js
