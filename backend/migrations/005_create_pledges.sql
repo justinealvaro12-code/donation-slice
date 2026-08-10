@@ -16,14 +16,7 @@ CREATE TABLE IF NOT EXISTS donation_pledges (
   pledge_date DATE NOT NULL,
   due_date    DATE,
 
-  status TEXT GENERATED ALWAYS AS (
-    CASE
-      WHEN amount_fulfilled >= amount_pledged THEN 'fulfilled'
-      WHEN amount_fulfilled > 0 THEN 'partially_fulfilled'
-      ELSE 'pledged'
-    END
-  ) STORED,
-
+ 
   created_by UUID NOT NULL,
   updated_by UUID NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
