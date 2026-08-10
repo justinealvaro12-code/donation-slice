@@ -1,5 +1,20 @@
 # RBAC_MATRIX.md — Donation Management System
 
+## JWT Integration Note (Pre-Development Assessment)
+
+This module is designed to consume ARGO's platform-issued JWT. The current
+implementation uses a development secret (`JWT_SECRET` in `.env`) for standalone
+testing. At integration time, the auth middleware will be updated to:
+
+- Verify tokens using ARGO's JWKS endpoint (RS256) or shared platform secret
+- Extract `user_id` (claim: `sub`), `organization_id`, and `role` from ARGO's token payload
+- The permission resolution mechanism (`permissionsForOrgRole`) remains unchanged
+
+Required from ARGO platform team:
+- JWKS URL or signing secret
+- Exact JWT claim names for user ID, organization ID, and role
+- Token expiry/refresh behavior
+
 ## 1. Authentication Model — No Separate Login System
 This module performs **no authentication of its own**. It consumes the platform-issued JWT on every request and trusts nothing else about identity or tenancy.
 
