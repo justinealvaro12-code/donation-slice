@@ -2907,7 +2907,7 @@ function SettingsPage({ token }) {
 
 /* ============================== app ============================== */
 export default function App() {
-  const [page, setPage] = useState('donations');
+  const [page, setPage] = useState('dashboard');
   const [token, setToken] = useState('');
   const [donations, setDonations] = useState([]);
   const [donors, setDonors] = useState([]);
