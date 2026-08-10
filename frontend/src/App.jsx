@@ -496,7 +496,7 @@ const NAV_ITEMS = [
 
 function Sidebar({ page, setPage, pendingCount }) {
   return (
-    <aside className="sidebar">
+    <aside className="sidebar bg-sidebar text-white">
       <div className="sidebar-brand">
         <div className="brand-logo"><Icon name="donations" size={22}/></div>
         <span className="brand-text">Giving</span>
@@ -2989,9 +2989,9 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className="app min-h-screen bg-canvas font-sans">
       <Sidebar page={page} setPage={setPage} pendingCount={pendingCount} />
-      <div className="main">
+      <div className="main bg-canvas flex-1">
         <Header user={user} organizations={organizations} />
         <div className="content">
           {page === 'dashboard' && (
