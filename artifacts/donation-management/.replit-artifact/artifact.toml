@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Donation Management System"
+description = "A tenant-isolated donation management application imported from the donation-slice repository, covering donors, donations, receipts, campaigns, pledges, reports, and organization settings."
+version = "1.0.0"
+id = "artifacts/donation-management"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25664
+
+[services.development]
+run = "pnpm --filter @workspace/donation-management run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/donation-management", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/donation-management/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25664"
+BASE_PATH = "/"
