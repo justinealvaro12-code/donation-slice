@@ -23,6 +23,7 @@ timeoutMs = 20000
 channel = "stable-25_05"
 
 run = "pnpm --filter @workspace/api-server run dev"
+packages = ["nano"]
 
 [[ports]]
 localPort = 5173

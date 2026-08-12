@@ -1,5 +1,12 @@
 # See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
+# Environment / secrets
+.env
+frontend/.env
+backend/.env
+.env.local
+.env.*.local
+
 # compiled output
 dist
 tmp
@@ -35,6 +42,7 @@ node_modules
 npm-debug.log
 yarn-error.log
 testem.log
+*.log
 /typings
 
 # System Files
@@ -47,3 +55,5 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+backend/.envY
+.envY
