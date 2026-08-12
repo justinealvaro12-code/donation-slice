@@ -4,6 +4,8 @@
 .env
 frontend/.env
 backend/.env
+.envY
+backend/.envY
 .env.local
 .env.*.local
 
@@ -55,5 +57,3 @@ Thumbs.db
 # Replit
 .cache/
 .local/
-backend/.envY
-.envY
