@@ -2,7 +2,7 @@ const { pool } = require('../db');
 
 async function findByOrganization(organizationId) {
   const result = await pool.query(
-    `SELECT r.*, dd.status as donation_status
+    `SELECT r.*, dd.status as donation_status, dd.amount as amount
      FROM donation_receipts r
      JOIN donation_donations dd ON dd.id = r.donation_id
      WHERE r.organization_id = $1 AND r.deleted_at IS NULL
@@ -14,7 +14,7 @@ async function findByOrganization(organizationId) {
 
 async function findById(id, organizationId) {
   const result = await pool.query(
-    `SELECT r.*, dd.status as donation_status
+    `SELECT r.*, dd.status as donation_status, dd.amount as amount
      FROM donation_receipts r
      JOIN donation_donations dd ON dd.id = r.donation_id
      WHERE r.id = $1 AND r.organization_id = $2 AND r.deleted_at IS NULL`,
@@ -32,13 +32,13 @@ async function findByDonationId(donationId, organizationId) {
   return result.rows[0] || null;
 }
 
-async function create({ donation_id, organization_id, receipt_number, amount, name, donor_email, donation_date, payment_channel, issued_by }, client = pool) {
+async function create({ donation_id, organization_id, receipt_number, issued_by }, client = pool) {
   const result = await client.query(
     `INSERT INTO donation_receipts 
-     (donation_id, organization_id, receipt_number, amount, name, donor_email, donation_date, payment_channel, issued_by, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'issued')
+     (donation_id, organization_id, receipt_number, issued_at, issued_by, status, created_by, updated_by)
+     VALUES ($1, $2, $3, NOW(), $4, 'issued', $4, $4)
      RETURNING *`,
-    [donation_id, organization_id, receipt_number, amount, name, donor_email, donation_date, payment_channel, issued_by]
+    [donation_id, organization_id, receipt_number, issued_by]
   );
   return result.rows[0];
 }

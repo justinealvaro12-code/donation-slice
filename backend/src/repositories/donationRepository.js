@@ -1,4 +1,6 @@
 const { pool } = require('../db');
+const receiptRepository = require('./receiptRepository');
+const settingsRepository = require('./settingsRepository');
 
 async function create(organizationId, userId, { donor_id, campaign_id, pledge_id, amount, payment_channel, payment_reference, donation_date }) {
   const result = await pool.query(
@@ -72,7 +74,21 @@ async function confirm(organizationId, userId, donationId) {
        WHERE id = $2 RETURNING *`,
       [userId, donationId]
     );
+	    const { prefix, sequence } =
+      await settingsRepository.getAndIncrementSequence(
+        client,
+        organizationId
+      );
 
+    const receiptNumber =
+      `${prefix}${String(sequence).padStart(6, '0')}`;
+
+    const receipt = await receiptRepository.create({
+      donation_id: donationId,
+      organization_id: organizationId,
+      receipt_number: receiptNumber,
+      issued_by: userId,
+    }, client);
     // Pledge fulfillment: a donation only counts toward a pledge once it's
     // actually confirmed (not while pending). Locks the pledge row before
     // updating so a simultaneous confirm on another donation against the
@@ -92,7 +108,7 @@ async function confirm(organizationId, userId, donationId) {
     }
 
     await client.query('COMMIT');
-    return { donation: updateResult.rows[0] };
+    return { donation: updateResult.rows[0], receipt: { ...receipt, amount: donation.amount } };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

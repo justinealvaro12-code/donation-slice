@@ -22,9 +22,9 @@ timeoutMs = 20000
 [nix]
 channel = "stable-25_05"
 
-run = "pnpm --filter @workspace/api-server run dev"
-packages = ["nano"]
+run = "cd backend && npm install && npm start"
+packages = ["nano", "python310"]
 
 [[ports]]
-localPort = 5173
+localPort = 4000
 externalPort = 80

@@ -1,102 +1,128 @@
-const db = require('../db'); // adjust path to your db connection
+const { pool } = require('../db');
 
 class ReportRepository {
-  _dateConditions(from, to) {
-    const conditions = [];
-    const params = [];
-    if (from) { conditions.push('created_at >= ?'); params.push(from); }
-    if (to)   { conditions.push('created_at <= ?'); params.push(to); }
-    return { clause: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '', params };
-  }
+  async getSummary(organizationId, from, to) {
+    const params = [organizationId];
+    let idx = 2;
+    let dateClause = '';
+    if (from) { dateClause += ` AND created_at >= $${idx++}`; params.push(from); }
+    if (to)   { dateClause += ` AND created_at <= $${idx++}`; params.push(to); }
 
-  async getSummary(from, to) {
-    const d = this._dateConditions(from, to);
-    
-    const [[donations]] = await db.query(
-      `SELECT COALESCE(SUM(amount),0) AS total, COUNT(*) AS count FROM donations ${d.clause}`,
-      d.params
+    const { rows: [donations] } = await pool.query(
+      `SELECT COALESCE(SUM(amount),0) AS total, COUNT(*) AS count 
+       FROM donation_donations 
+       WHERE organization_id = $1 AND deleted_at IS NULL${dateClause}`,
+      params
     );
-    
-    const [[pledges]] = await db.query(
-      `SELECT COALESCE(SUM(amount),0) AS total, COUNT(*) AS count,
-              COALESCE(SUM(amount_paid),0) AS paid_total FROM pledges ${d.clause}`,
-      d.params
+
+    const { rows: [pledges] } = await pool.query(
+      `SELECT COALESCE(SUM(amount_pledged),0) AS total, COUNT(*) AS count,
+              COALESCE(SUM(amount_fulfilled),0) AS paid_total 
+       FROM donation_pledges 
+       WHERE organization_id = $1 AND deleted_at IS NULL${dateClause}`,
+      params
     );
-    
-    const [[donors]] = await db.query(
-      `SELECT COUNT(DISTINCT donor_id) AS count FROM donations ${d.clause}`,
-      d.params
+
+    const { rows: [donors] } = await pool.query(
+      `SELECT COUNT(DISTINCT donor_id) AS count 
+       FROM donation_donations 
+       WHERE organization_id = $1 AND deleted_at IS NULL${dateClause}`,
+      params
     );
 
     return {
       totalDonations: parseFloat(donations.total),
-      donationCount: donations.count,
+      donationCount: parseInt(donations.count, 10),
       totalPledges: parseFloat(pledges.total),
-      pledgeCount: pledges.count,
+      pledgeCount: parseInt(pledges.count, 10),
       pledgePaid: parseFloat(pledges.paid_total),
-      activeDonors: donors.count,
-      pledgeFulfillmentRate: pledges.total > 0
-        ? Math.round((pledges.paid_total / pledges.total) * 100)
+      activeDonors: parseInt(donors.count, 10),
+      pledgeFulfillmentRate: parseFloat(pledges.total) > 0
+        ? Math.round((parseFloat(pledges.paid_total) / parseFloat(pledges.total)) * 100)
         : 0
     };
   }
 
-  async getMonthlyTrends(from, to) {
-    const d = this._dateConditions(from, to);
-    const [rows] = await db.query(
-      `SELECT DATE_FORMAT(created_at,'%Y-%m') AS month,
+  async getMonthlyTrends(organizationId, from, to) {
+    const params = [organizationId];
+    let idx = 2;
+    let dateClause = '';
+    if (from) { dateClause += ` AND created_at >= $${idx++}`; params.push(from); }
+    if (to)   { dateClause += ` AND created_at <= $${idx++}`; params.push(to); }
+
+    const { rows } = await pool.query(
+      `SELECT TO_CHAR(created_at,'YYYY-MM') AS month,
               COALESCE(SUM(amount),0) AS total, COUNT(*) AS count
-       FROM donations ${d.clause}
+       FROM donation_donations 
+       WHERE organization_id = $1 AND deleted_at IS NULL${dateClause}
        GROUP BY month ORDER BY month`,
-      d.params
+      params
     );
-    return rows.map(r => ({ month: r.month, total: parseFloat(r.total), count: r.count }));
+    return rows.map(r => ({ month: r.month, total: parseFloat(r.total), count: parseInt(r.count, 10) }));
   }
 
-  async getCampaignBreakdown(from, to) {
-    const params = [];
-    let onClause = 'c.id = d.campaign_id';
-    if (from) { onClause += ' AND d.created_at >= ?'; params.push(from); }
-    if (to)   { onClause += ' AND d.created_at <= ?'; params.push(to); }
-    
-    const [rows] = await db.query(
+  async getCampaignBreakdown(organizationId, from, to) {
+    const params = [organizationId];
+    let idx = 2;
+    let donationDateClause = '';
+    if (from) { donationDateClause += ` AND d.created_at >= $${idx++}`; params.push(from); }
+    if (to)   { donationDateClause += ` AND d.created_at <= $${idx++}`; params.push(to); }
+
+    const { rows } = await pool.query(
       `SELECT c.id, c.name,
               COALESCE(SUM(d.amount),0) AS total,
               COUNT(d.id) AS count
-       FROM campaigns c
-       LEFT JOIN donations d ON ${onClause}
+       FROM donation_campaigns c
+       LEFT JOIN donation_donations d ON c.id = d.campaign_id 
+                             AND d.organization_id = $1 
+                             AND d.deleted_at IS NULL${donationDateClause}
+       WHERE c.organization_id = $1 AND c.deleted_at IS NULL
        GROUP BY c.id, c.name
        ORDER BY total DESC`,
       params
     );
-    return rows.map(r => ({ id: r.id, name: r.name, total: parseFloat(r.total), count: r.count }));
+    return rows.map(r => ({ id: r.id, name: r.name, total: parseFloat(r.total), count: parseInt(r.count, 10) }));
   }
 
-  async getChannelBreakdown(from, to) {
-    const d = this._dateConditions(from, to);
-    const [rows] = await db.query(
+  async getChannelBreakdown(organizationId, from, to) {
+    const params = [organizationId];
+    let idx = 2;
+    let dateClause = '';
+    if (from) { dateClause += ` AND created_at >= $${idx++}`; params.push(from); }
+    if (to)   { dateClause += ` AND created_at <= $${idx++}`; params.push(to); }
+
+    const { rows } = await pool.query(
       `SELECT payment_channel AS channel,
               COALESCE(SUM(amount),0) AS total, COUNT(*) AS count
-       FROM donations ${d.clause}
+       FROM donation_donations 
+       WHERE organization_id = $1 AND deleted_at IS NULL${dateClause}
        GROUP BY payment_channel ORDER BY total DESC`,
-      d.params
+      params
     );
-    return rows.map(r => ({ channel: r.channel || 'Unknown', total: parseFloat(r.total), count: r.count }));
+    return rows.map(r => ({ channel: r.channel || 'Unknown', total: parseFloat(r.total), count: parseInt(r.count, 10) }));
   }
 
-  async getTopDonors(from, to, limit = 10) {
-    const d = this._dateConditions(from, to);
-    const [rows] = await db.query(
-      `SELECT dnr.id, dnr.name, dnr.email,
+  async getTopDonors(organizationId, from, to, limit = 10) {
+    const params = [organizationId];
+    let idx = 2;
+    let dateClause = '';
+    if (from) { dateClause += ` AND d.created_at >= $${idx++}`; params.push(from); }
+    if (to)   { dateClause += ` AND d.created_at <= $${idx++}`; params.push(to); }
+    params.push(parseInt(limit, 10));
+
+    const { rows } = await pool.query(
+      `SELECT dnr.id, dnr.display_name AS name, dnr.email,
               COALESCE(SUM(d.amount),0) AS total, COUNT(*) AS count
-       FROM donors dnr
-       JOIN donations d ON dnr.id = d.donor_id
-       ${d.clause}
-       GROUP BY dnr.id, dnr.name, dnr.email
-       ORDER BY total DESC LIMIT ?`,
-      [...d.params, parseInt(limit)]
+       FROM donation_donors dnr
+       JOIN donation_donations d ON dnr.id = d.donor_id 
+                        AND d.organization_id = $1 
+                        AND d.deleted_at IS NULL${dateClause}
+       WHERE dnr.organization_id = $1 AND dnr.deleted_at IS NULL
+       GROUP BY dnr.id, dnr.display_name, dnr.email
+       ORDER BY total DESC LIMIT $${idx++}`,
+      params
     );
-    return rows.map(r => ({ id: r.id, name: r.name, email: r.email, total: parseFloat(r.total), count: r.count }));
+    return rows.map(r => ({ id: r.id, name: r.name, email: r.email, total: parseFloat(r.total), count: parseInt(r.count, 10) }));
   }
 }
 

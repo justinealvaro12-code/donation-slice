@@ -5,7 +5,10 @@ const { pool } = require('../db');
 
 async function migrate() {
   const migrationsDir = path.join(__dirname, '..', '..', 'migrations');
-  const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
+  const files = fs.readdirSync(migrationsDir)
+    .filter((f) => f.endsWith('.sql'))
+    .filter((f) => !f.startsWith('down_'))
+    .sort();
 
   for (const file of files) {
     const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');

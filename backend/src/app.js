@@ -27,9 +27,18 @@ function createApp() {
   app.use('/api/pledges', pledgesRouter);
   app.use('/api/reports', require('./routes/reports'));
   app.use('/api/settings', settingsRouter);
-  // 404 handler
-  app.use((req, res) => {
+  // Serve built frontend
+  const path = require('path');
+  app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
+  // API 404 handler — only for /api routes
+  app.use('/api', (req, res) => {
     res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Endpoint not found' } });
+  });
+
+  // SPA catch-all: serve index.html for all non-API routes
+  app.use((req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
   });
 
   // Global error handler

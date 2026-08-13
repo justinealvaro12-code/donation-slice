@@ -41,12 +41,12 @@ beforeAll(async () => {
   userBManager = uBM.rows[0];
 
   const dA = await pool.query(
-    `INSERT INTO donors (organization_id, donor_type, display_name, created_by, updated_by)
+    `INSERT INTO donation_donors (organization_id, donor_type, display_name, created_by, updated_by)
      VALUES ($1, 'individual', 'Donor A', $2, $2) RETURNING *`,
     [orgA.id, userAManager.id]
   );
   const dB = await pool.query(
-    `INSERT INTO donors (organization_id, donor_type, display_name, created_by, updated_by)
+    `INSERT INTO donation_donors (organization_id, donor_type, display_name, created_by, updated_by)
      VALUES ($1, 'individual', 'Donor B', $2, $2) RETURNING *`,
     [orgB.id, userBManager.id]
   );
