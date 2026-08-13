@@ -26,5 +26,5 @@ run = "cd backend && npm install && npm start"
 packages = ["nano", "python310"]
 
 [[ports]]
-localPort = 4000
+localPort = 5173
 externalPort = 80
