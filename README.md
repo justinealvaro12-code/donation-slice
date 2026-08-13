@@ -85,8 +85,29 @@ npm test
 ## Test Accounts / Sample Roles
 Seed script creates, per organization: `viewer`, `fundraising_staff`, `finance_staff`, `manager`, `administrator` — matching `/docs/RBAC_MATRIX.md` exactly. Emails follow the pattern `<role>@orgA.example.com` / `<role>@orgB.example.com`; JWTs are printed to stdout by `npm run seed`.
 
+## Authentication (Demo Mode)
+This module is designed to consume ARGO's centralized platform JWT, per the platform
+assumptions in the Pre-Development Assessment — the module receives an authenticated
+platform JWT and must never trust a client-submitted organization context, and must
+not build its own separate login system.
+
+Since live ARGO SSO access has not yet been granted to interns, the deployed demo uses
+a manually-seeded JWT as a temporary stand-in for the real platform token:
+
+1. From `/backend`, run `npm run seed`.
+2. Copy any printed token (e.g. `orgA_manager`) from the console output.
+3. On the deployed app, open DevTools Console and run:
+```js
+   localStorage.setItem('giving_token', '<paste token here>');
+```
+4. Refresh the page.
+
+No standalone login page exists by design, since a separate module-specific login would
+violate the platform's centralized-authentication requirement. This bootstrap step is a
+temporary substitute for ARGO SSO, not a permanent authentication system, and will be
+removed once the module is wired into ARGO's actual authentication flow.
+
 ## Known Limitations
-- Campaigns and Pledges are designed (see `/docs/ERD.md`, `/docs/WORKFLOW.md`) but not implemented in this slice — donations here are standalone gifts, not linked to a campaign or pledge.
 - Receipt issuance is a side effect of `donation.confirm` only; there's no standalone `receipt.issue` endpoint (see the design-decision note in `/docs/API_CONTRACT.md`).
-- No real platform JWT issuance — this slice verifies JWTs signed with a shared dev secret (`JWT_SECRET`) to simulate what ARGO's platform would issue; production integration would consume ARGO's actual signing key/JWKS.
-- Not executed end-to-end in the authoring environment (see the honesty note under Tests above) — verify locally before the defense.
+- No real platform JWT issuance — this slice verifies JWTs signed with a shared dev secret (`JWT_SECRET`) to simulate what ARGO's platform would issue; production integration would consume ARGO's actual signing key/JWKS. See "Authentication (Demo Mode)" above for the manual bootstrap steps used on the live demo.
+- Not executed end-to-end in the authoring environment during initial writing — since verified working via live deployment testing (Donations, Donors, Campaigns, Pledges, Receipts all confirmed functional).
