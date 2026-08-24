@@ -32,13 +32,13 @@ async function findByDonationId(donationId, organizationId) {
   return result.rows[0] || null;
 }
 
-async function create({ donation_id, organization_id, receipt_number, amount, name, donor_email, donation_date, payment_channel, issued_by }, client = pool) {
+async function create({ donation_id, organization_id, receipt_number, issued_by }, client = pool) {
   const result = await client.query(
     `INSERT INTO donation_receipts 
-     (donation_id, organization_id, receipt_number, amount, name, donor_email, donation_date, payment_channel, issued_by, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'issued')
+     (donation_id, organization_id, receipt_number, issued_by, status)
+     VALUES ($1, $2, $3, $4, 'issued')
      RETURNING *`,
-    [donation_id, organization_id, receipt_number, amount, name, donor_email, donation_date, payment_channel, issued_by]
+    [donation_id, organization_id, receipt_number, issued_by]
   );
   return result.rows[0];
 }
