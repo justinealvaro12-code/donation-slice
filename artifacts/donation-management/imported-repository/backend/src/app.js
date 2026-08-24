@@ -28,6 +28,9 @@ function createApp() {
   app.use('/api/reports', require('./routes/reports'));
   app.use('/api/settings', settingsRouter);
   // 404 handler
+  app.use((req, res) => {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Endpoint not found' } });
+  });
 
   // Global error handler
   app.use((err, req, res, next) => {

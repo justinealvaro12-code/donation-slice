@@ -36,9 +36,9 @@ async function reset() {
     await pool.query(`DELETE FROM donation_receipts WHERE organization_id = ANY($1)`, [orgIds]);
     await pool.query(`DELETE FROM donation_donations WHERE organization_id = ANY($1)`, [orgIds]);
     await pool.query(`DELETE FROM donation_donors WHERE organization_id = ANY($1)`, [orgIds]);
-    await pool.query(`DELETE FROM donation_role_permissions WHERE organization_id = ANY($1)`, [orgIds]);
-    await pool.query(`DELETE FROM donation_payment_channels WHERE organization_id = ANY($1)`, [orgIds]);
-    await pool.query(`DELETE FROM donation_receipt_settings WHERE organization_id = ANY($1)`, [orgIds]);
+    await pool.query(`DELETE FROM organization_role_permissions WHERE organization_id = ANY($1)`, [orgIds]);
+    await pool.query(`DELETE FROM organization_payment_channels WHERE organization_id = ANY($1)`, [orgIds]);
+    await pool.query(`DELETE FROM organization_receipt_settings WHERE organization_id = ANY($1)`, [orgIds]);
     await pool.query(`DELETE FROM users WHERE organization_id = ANY($1)`, [orgIds]);
     await pool.query(`DELETE FROM organizations WHERE id = ANY($1)`, [orgIds]);
     console.log(`Cleared ${orgIds.length} previously seeded organization(s) and their related data.`);

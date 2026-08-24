@@ -4,13 +4,13 @@ const { permissionsForRole } = require('../rolePermissions');
 require('dotenv').config();
 
 // Looks up this organization's actual permission grants for the role from
-// donation_role_permissions (editable via Settings > Roles &
+// organization_role_permissions (editable via Settings > Roles &
 // Permissions). Falls back to the hardcoded ROLE_PERMISSIONS defaults if
 // the org has no rows yet for this role — covers orgs seeded before
 // Settings existed, or a role whose defaults were never customized.
 async function permissionsForOrgRole(organizationId, role) {
   const result = await pool.query(
-    `SELECT permission FROM donation_role_permissions
+    `SELECT permission FROM organization_role_permissions
      WHERE organization_id = $1 AND role = $2`,
     [organizationId, role]
   );

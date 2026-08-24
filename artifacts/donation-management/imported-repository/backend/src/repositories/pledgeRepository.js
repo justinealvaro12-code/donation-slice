@@ -73,10 +73,10 @@ async function list(organizationId, { page = 1, pageSize = 20, status, campaign_
 async function summary(organizationId) {
   const result = await pool.query(
     `SELECT
-       COALESCE(SUM(amount_pledged - amount_fulfilled) FILTER (WHERE ${statusExpr('p')} != 'fulfilled'), 0) AS total_outstanding,
-       COUNT(*) FILTER (WHERE due_date IS NOT NULL AND due_date < CURRENT_DATE AND ${statusExpr('p')} != 'fulfilled') AS overdue_count,
+       COALESCE(SUM(amount_pledged - amount_fulfilled) FILTER (WHERE ${statusExpr()} != 'fulfilled'), 0) AS total_outstanding,
+       COUNT(*) FILTER (WHERE due_date IS NOT NULL AND due_date < CURRENT_DATE AND ${statusExpr()} != 'fulfilled') AS overdue_count,
        COALESCE(SUM(amount_fulfilled), 0) AS total_fulfilled
-     FROM donation_pledges p
+     FROM donation_pledges
      WHERE organization_id = $1 AND deleted_at IS NULL`,
     [organizationId]
   );

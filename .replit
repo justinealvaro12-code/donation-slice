@@ -21,10 +21,3 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
-
-run = "cd backend && npm install && npm start"
-packages = ["nano", "python310"]
-
-[[ports]]
-localPort = 5173
-externalPort = 80
