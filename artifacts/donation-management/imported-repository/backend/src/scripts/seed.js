@@ -35,6 +35,8 @@ async function reset() {
   if (orgIds.length > 0) {
     await pool.query(`DELETE FROM donation_receipts WHERE organization_id = ANY($1)`, [orgIds]);
     await pool.query(`DELETE FROM donation_donations WHERE organization_id = ANY($1)`, [orgIds]);
+    await pool.query(`DELETE FROM donation_pledges WHERE organization_id = ANY($1)`, [orgIds]);
+    await pool.query(`DELETE FROM donation_campaigns WHERE organization_id = ANY($1)`, [orgIds]);
     await pool.query(`DELETE FROM donation_donors WHERE organization_id = ANY($1)`, [orgIds]);
     await pool.query(`DELETE FROM organization_role_permissions WHERE organization_id = ANY($1)`, [orgIds]);
     await pool.query(`DELETE FROM organization_payment_channels WHERE organization_id = ANY($1)`, [orgIds]);
