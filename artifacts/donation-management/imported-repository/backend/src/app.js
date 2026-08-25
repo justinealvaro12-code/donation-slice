@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 const { authenticate } = require("./middleware/auth");
 const donationsRouter = require("./routes/donations");
 const donorsRouter = require("./routes/donors");
@@ -34,7 +35,21 @@ function createApp() {
   app.use("/api/reports", authenticate, require("./routes/reports"));
   app.use("/api/settings", authenticate, settingsRouter);
 
-  // 404 handler
+  // Serve the built frontend. Must be registered BEFORE the JSON 404
+  // handler below, or every non-API request (including "/") gets
+  // swallowed by that catch-all first and the frontend never loads
+  // in production.
+  const staticDir = path.join(__dirname, "../../../dist/public");
+  app.use(express.static(staticDir));
+
+  // SPA fallback: any GET that isn't an API call falls through to
+  // index.html so client-side routing works on refresh/deep links.
+  app.get(/^(?!\/api).*/, (req, res) => {
+    res.sendFile(path.join(staticDir, "index.html"));
+  });
+
+  // 404 handler - only reached now for unmatched /api/* requests,
+  // since the static/SPA handlers above already caught everything else.
   app.use((req, res) => {
     res
       .status(404)
@@ -44,11 +59,9 @@ function createApp() {
   // Global error handler
   app.use((err, req, res, next) => {
     console.error("Unhandled error:", err);
-    res
-      .status(500)
-      .json({
-        error: { code: "INTERNAL_ERROR", message: "Something went wrong" },
-      });
+    res.status(500).json({
+      error: { code: "INTERNAL_ERROR", message: "Something went wrong" },
+    });
   });
 
   return app;
