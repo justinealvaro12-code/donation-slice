@@ -941,9 +941,110 @@ function NotificationBell({ token, onNavigate }) {
     </div>
   );
 }
+/* ============================== profile menu ============================== */
+function ProfileMenu({ user, organizations, onPageChange }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = React.useRef(null);
 
+  const org = organizations.find((o) => o.id === user?.organization_id);
+
+  // Future-proof: uses name/email when available, falls back to role
+  const displayName =
+    user?.name ||
+    (user?.role
+      ? user.role.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
+      : "User");
+  const email = user?.email;
+  const initial = user?.name?.[0] || user?.role?.[0]?.toUpperCase() || "A";
+  const orgName = org?.name || "Unknown Organization";
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    function handleKeyDown(e) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
+
+  const handleToggle = () => setOpen((o) => !o);
+
+  const handleNavigate = (page) => {
+    setOpen(false);
+    onPageChange(page);
+  };
+
+  const handleLogout = () => {
+    setOpen(false);
+    localStorage.removeItem("giving_token");
+    window.location.reload();
+  };
+
+  return (
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <button
+        className="avatar avatar-trigger"
+        onClick={handleToggle}
+        aria-label="Open profile menu"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        type="button"
+      >
+        {initial}
+      </button>
+
+      {open && (
+        <div className="profile-dropdown" role="menu" aria-label="Profile menu">
+          <div className="profile-dropdown-header">
+            <div className="profile-dropdown-name">{displayName}</div>
+            {email && <div className="profile-dropdown-email">{email}</div>}
+            <div className="profile-dropdown-org">{orgName}</div>
+          </div>
+          <div className="profile-dropdown-divider" />
+          <button
+            className="profile-dropdown-item"
+            role="menuitem"
+            onClick={() => handleNavigate("organizations")}
+          >
+            <Icon name="person" size={16} />
+            <span>My Organization</span>
+          </button>
+          <button
+            className="profile-dropdown-item"
+            role="menuitem"
+            onClick={() => handleNavigate("settings")}
+          >
+            <Icon name="settings" size={16} />
+            <span>Settings</span>
+          </button>
+          <div className="profile-dropdown-divider" />
+          <button
+            className="profile-dropdown-item profile-dropdown-item-danger"
+            role="menuitem"
+            onClick={handleLogout}
+          >
+            <span>Log out</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 /* ============================== header ============================== */
-function Header({ user, organizations, token, onNavigate }) {
+function Header({ user, organizations, token, onNavigate, onPageChange }) {
   const org = organizations.find((o) => o.id === user?.organization_id);
   return (
     <header className="topbar">
@@ -953,7 +1054,11 @@ function Header({ user, organizations, token, onNavigate }) {
       </div>
       <div className="topbar-actions">
         <NotificationBell token={token} onNavigate={onNavigate} />
-        <div className="avatar">{user?.name?.[0] || "A"}</div>
+        <ProfileMenu
+          user={user}
+          organizations={organizations}
+          onPageChange={onPageChange}
+        />
       </div>
     </header>
   );
@@ -4420,6 +4525,7 @@ export default function App() {
           organizations={organizations}
           token={token}
           onNavigate={handleNotificationNavigate}
+          onPageChange={setPage}
         />
         <div className="content">
           {page === "dashboard" && (
