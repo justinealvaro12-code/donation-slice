@@ -397,7 +397,7 @@ function DonationDetailModal({ donation, donor, pledge, onClose }) {
         <div className="detail-item">
           <span className="detail-label">Donor</span>
           <span className="detail-value">
-            {donor?.display_name || "Unknown"}
+            {donation?.donor_display_name || donor?.display_name || "Unknown"}
           </span>
         </div>
         <div className="detail-item">
@@ -819,7 +819,11 @@ function DashboardPage({ organizations, donors, donations, loading }) {
                   const donor = donorMap[d.donor_id];
                   return (
                     <tr key={d.id}>
-                      <td>{donor?.display_name || "Unknown"}</td>
+                      <td>
+                        {d.donor_display_name ||
+                          donor?.display_name ||
+                          "Unknown"}
+                      </td>
                       <td className="amount">{formatCurrency(d.amount)}</td>
                       <td>
                         <StatusPill status={d.status} />
@@ -1054,7 +1058,9 @@ function DonationsPage({
                       <td>
                         <div className="donor-cell">
                           <span className="donor-name">
-                            {donor?.display_name || "Unknown"}
+                            {d.donor_display_name ||
+                              donor?.display_name ||
+                              "Unknown"}
                           </span>
                           {organizations.find(
                             (o) => o.id === donor?.organization_id,
@@ -1701,7 +1707,11 @@ function ReceiptsPage({ token, donations, donors, loading, onRefresh }) {
                   const donor = donorMap[d.donor_id];
                   return (
                     <tr key={d.id}>
-                      <td>{donor?.display_name || "Unknown"}</td>
+                      <td>
+                        {d.donor_display_name ||
+                          donor?.display_name ||
+                          "Unknown"}
+                      </td>
                       <td className="amount">{formatCurrency(d.amount)}</td>
                       <td>{formatDate(d.donation_date)}</td>
                       <td className="actions">
@@ -3042,8 +3052,25 @@ function ReportsPage({ donations, donors, campaigns, organizations, loading }) {
     });
     donations.forEach((d) => {
       if (d.status !== "confirmed") return;
-      const s = stats[d.donor_id];
-      if (!s) return;
+      let s = stats[d.donor_id];
+      if (!s) {
+        // Donor no longer in the active donors list (deleted after
+        // donating) — don't drop their giving history from the report,
+        // fall back to the name captured on the donation itself.
+        s = {
+          donor: {
+            id: d.donor_id,
+            display_name: d.donor_display_name || "Removed Donor",
+            organization_id: null,
+            email: null,
+          },
+          totalDonated: 0,
+          count: 0,
+          firstDate: null,
+          lastDate: null,
+        };
+        stats[d.donor_id] = s;
+      }
       s.totalDonated += Number(d.amount || 0);
       s.count += 1;
       const date = new Date(d.donation_date);
