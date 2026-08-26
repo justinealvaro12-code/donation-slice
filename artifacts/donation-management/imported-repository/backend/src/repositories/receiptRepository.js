@@ -16,6 +16,7 @@ async function findByOrganization(organizationId) {
 async function findById(id, organizationId) {
   const result = await pool.query(
     `SELECT r.*, dd.status as donation_status, dd.payment_channel,
+            dd.amount, dd.donation_date,
             don.display_name as donor_name, don.email as donor_email
      FROM donation_receipts r
      JOIN donation_donations dd ON dd.id = r.donation_id
