@@ -1523,7 +1523,7 @@ function ReceiptModal({ receipt, onClose }) {
           <p>No. ${receipt.receipt_number}</p>
         </div>
         <div class="row"><span class="label">Date Issued</span><span class="value">${formatDate(receipt.issued_at)}</span></div>
-        <div class="row"><span class="label">Donor Name</span><span class="value">${receipt.name}</span></div>
+        <div class="row"><span class="label">Donor Name</span><span class="value">${receipt.donor_name || "Unknown"}</span></div>
         ${receipt.donor_email ? `<div class="row"><span class="label">Email</span><span class="value">${receipt.donor_email}</span></div>` : ""}
         <div class="row"><span class="label">Donation Date</span><span class="value">${formatDate(receipt.donation_date)}</span></div>
         <div class="row"><span class="label">Payment Method</span><span class="value capitalize">${receipt.payment_channel || "—"}</span></div>
@@ -1558,7 +1558,9 @@ function ReceiptModal({ receipt, onClose }) {
         </div>
         <div className="detail-item">
           <span className="detail-label">Donor</span>
-          <span className="detail-value">{receipt.name}</span>
+          <span className="detail-value">
+            {receipt.donor_name || "Unknown"}
+          </span>
         </div>
         <div className="detail-item">
           <span className="detail-label">Issued</span>
@@ -1768,7 +1770,7 @@ function ReceiptsPage({ token, donations, donors, loading, onRefresh }) {
                     <td>
                       <code>{r.receipt_number}</code>
                     </td>
-                    <td>{r.name}</td>
+                    <td>{r.donor_name || "Unknown"}</td>
                     <td className="amount">{formatCurrency(r.amount)}</td>
                     <td>{formatDate(r.issued_at)}</td>
                     <td className="actions">

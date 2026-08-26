@@ -15,9 +15,11 @@ async function findByOrganization(organizationId) {
 
 async function findById(id, organizationId) {
   const result = await pool.query(
-    `SELECT r.*, dd.status as donation_status
+    `SELECT r.*, dd.status as donation_status, dd.payment_channel,
+            don.display_name as donor_name, don.email as donor_email
      FROM donation_receipts r
      JOIN donation_donations dd ON dd.id = r.donation_id
+     JOIN donation_donors don ON don.id = dd.donor_id
      WHERE r.id = $1 AND r.organization_id = $2 AND r.deleted_at IS NULL`,
     [id, organizationId],
   );
