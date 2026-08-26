@@ -1378,3 +1378,9 @@ body {
   opacity: 0.5;
   cursor: not-allowed;
 }
+.hbar-row-highlight {
+  background: #fef9c3;
+  border-radius: 6px;
+  padding: 4px 6px;
+  transition: background 0.3s ease;
+}

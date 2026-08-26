@@ -778,7 +778,11 @@ function NotificationBell({ token, onNavigate }) {
     } else if (type === "pledge_overdue") {
       onNavigate?.({ page: "pledges", tab: "overdue", detailId: id });
     } else if (type === "campaign_goal") {
-      onNavigate?.({ page: "campaigns", tab: "performance", detailId: null });
+      // Pass the campaign id through so CampaignsPage can highlight the
+      // matching bar on the Performance tab — previously this was
+      // hardcoded to null, which is why the click landed on the tab but
+      // never pointed at a specific campaign.
+      onNavigate?.({ page: "campaigns", tab: "performance", detailId: id });
     }
   };
 
@@ -2193,7 +2197,7 @@ function CampaignFormModal({ token, campaign, onClose, onSave }) {
 }
 
 /* ============================== raised vs goal horizontal bar chart ============================== */
-function RaisedVsGoalChart({ campaigns }) {
+function RaisedVsGoalChart({ campaigns, highlightId }) {
   const active = campaigns.filter((c) => c.status === "active");
   const maxValue = Math.max(
     ...active.map((c) =>
@@ -2223,8 +2227,15 @@ function RaisedVsGoalChart({ campaigns }) {
       {active.map((c) => {
         const goalPct = (Number(c.goal_amount) / maxValue) * 100;
         const raisedPct = (Number(c.raised_amount) / maxValue) * 100;
+        const isHighlighted = c.id === highlightId;
         return (
-          <div key={c.id} className="hbar-row">
+          <div
+            key={c.id}
+            className={classNames(
+              "hbar-row",
+              isHighlighted && "hbar-row-highlight",
+            )}
+          >
             <span className="hbar-label" title={c.name}>
               {c.name}
             </span>
@@ -2298,13 +2309,24 @@ function CampaignsPage({
   const [statusFilter, setStatusFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState(null);
+  const [highlightCampaignId, setHighlightCampaignId] = useState(null);
 
   useEffect(() => {
     if (navTarget?.page === "campaigns") {
       setTab(navTarget.tab || "all");
+      if (navTarget.detailId) setHighlightCampaignId(navTarget.detailId);
       onNavConsumed?.();
     }
   }, [navTarget]);
+
+  // Auto-clear the highlight a few seconds after it's set, so it draws the
+  // eye to the campaign that triggered the notification without lingering
+  // indefinitely if the user just leaves the Performance tab open.
+  useEffect(() => {
+    if (!highlightCampaignId) return;
+    const timer = setTimeout(() => setHighlightCampaignId(null), 5000);
+    return () => clearTimeout(timer);
+  }, [highlightCampaignId]);
 
   const filtered = useMemo(() => {
     let rows = campaigns;
@@ -2479,7 +2501,10 @@ function CampaignsPage({
           <div className="card">
             <h3 className="table-title">Raised vs Goal by Campaign</h3>
             <p className="page-subtitle">Active campaigns</p>
-            <RaisedVsGoalChart campaigns={campaigns} />
+            <RaisedVsGoalChart
+              campaigns={campaigns}
+              highlightId={highlightCampaignId}
+            />
           </div>
           <div className="card">
             <h3 className="table-title">Campaign Timeline</h3>
