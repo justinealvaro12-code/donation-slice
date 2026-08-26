@@ -691,8 +691,7 @@ function Sidebar({ page, setPage, pendingCount, role }) {
   );
 }
 
-/* ============================== notifications ============================== */
-function NotificationBell({ token }) {
+function NotificationBell({ token, onNavigate }) {
   const [items, setItems] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
@@ -760,6 +759,26 @@ function NotificationBell({ token }) {
     } catch (err) {
       console.error(err);
       fetchNotifications();
+    }
+  };
+
+  // Each key is "<type>:<uuid>" (e.g. "pledge_overdue:3f9a..."). UUIDs never
+  // contain a colon, so splitting on the first colon cleanly separates type
+  // from id.
+  const handleItemClick = (n) => {
+    if (!n.read) markRead(n.key);
+    setOpen(false);
+
+    const sep = n.key.indexOf(":");
+    const type = n.key.slice(0, sep);
+    const id = n.key.slice(sep + 1);
+
+    if (type === "donation") {
+      onNavigate?.({ page: "donations", tab: "all", detailId: id });
+    } else if (type === "pledge_overdue") {
+      onNavigate?.({ page: "pledges", tab: "overdue", detailId: id });
+    } else if (type === "campaign_goal") {
+      onNavigate?.({ page: "campaigns", tab: "performance", detailId: null });
     }
   };
 
@@ -851,13 +870,13 @@ function NotificationBell({ token }) {
             items.map((n) => (
               <div
                 key={n.key}
-                onClick={() => !n.read && markRead(n.key)}
+                onClick={() => handleItemClick(n)}
                 style={{
                   display: "flex",
                   gap: 10,
                   padding: "12px 16px",
                   borderBottom: "1px solid #f8fafc",
-                  cursor: n.read ? "default" : "pointer",
+                  cursor: "pointer",
                   background: n.read ? "#fff" : "#f0f9ff",
                 }}
               >
@@ -920,7 +939,7 @@ function NotificationBell({ token }) {
 }
 
 /* ============================== header ============================== */
-function Header({ user, organizations, token }) {
+function Header({ user, organizations, token, onNavigate }) {
   const org = organizations.find((o) => o.id === user?.organization_id);
   return (
     <header className="topbar">
@@ -929,7 +948,7 @@ function Header({ user, organizations, token }) {
         <span className="org-name">{org?.name || "Unknown Organization"}</span>
       </div>
       <div className="topbar-actions">
-        <NotificationBell token={token} />
+        <NotificationBell token={token} onNavigate={onNavigate} />
         <div className="avatar">{user?.name?.[0] || "A"}</div>
       </div>
     </header>
@@ -1076,6 +1095,8 @@ function DonationsPage({
   organizations,
   loading,
   onRefresh,
+  navTarget,
+  onNavConsumed,
 }) {
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
@@ -1084,6 +1105,14 @@ function DonationsPage({
   const [showRecord, setShowRecord] = useState(false);
   const [detailId, setDetailId] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+
+  useEffect(() => {
+    if (navTarget?.page === "donations") {
+      setTab(navTarget.tab || "all");
+      if (navTarget.detailId) setDetailId(navTarget.detailId);
+      onNavConsumed?.();
+    }
+  }, [navTarget]);
 
   const donorMap = useMemo(() => {
     const m = {};
@@ -2256,12 +2285,26 @@ function CampaignTimeline({ campaigns }) {
 }
 
 /* ============================== campaigns page ============================== */
-function CampaignsPage({ token, campaigns, loading, onRefresh }) {
+function CampaignsPage({
+  token,
+  campaigns,
+  loading,
+  onRefresh,
+  navTarget,
+  onNavConsumed,
+}) {
   const [tab, setTab] = useState("all"); // 'all' | 'performance'
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState(null);
+
+  useEffect(() => {
+    if (navTarget?.page === "campaigns") {
+      setTab(navTarget.tab || "all");
+      onNavConsumed?.();
+    }
+  }, [navTarget]);
 
   const filtered = useMemo(() => {
     let rows = campaigns;
@@ -2779,6 +2822,8 @@ function PledgesPage({
   summary,
   loading,
   onRefresh,
+  navTarget,
+  onNavConsumed,
 }) {
   const [tab, setTab] = useState("all"); // 'all' | 'overdue'
   const [search, setSearch] = useState("");
@@ -2788,6 +2833,14 @@ function PledgesPage({
   const [editingPledge, setEditingPledge] = useState(null);
   const [detailId, setDetailId] = useState(null);
   const [deleting, setDeleting] = useState(null);
+
+  useEffect(() => {
+    if (navTarget?.page === "pledges") {
+      setTab(navTarget.tab || "all");
+      if (navTarget.detailId) setDetailId(navTarget.detailId);
+      onNavConsumed?.();
+    }
+  }, [navTarget]);
 
   const filtered = useMemo(() => {
     let rows = [...pledges];
@@ -4230,6 +4283,7 @@ export default function App() {
   const [organization, setOrganization] = useState(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [navTarget, setNavTarget] = useState(null);
 
   const fetchAll = useCallback(
     async (currentToken) => {
@@ -4282,6 +4336,11 @@ export default function App() {
     }
   };
 
+  const handleNotificationNavigate = (target) => {
+    setPage(target.page);
+    setNavTarget(target);
+  };
+
   const pendingCount = useMemo(
     () => donations.filter((d) => d.status === "pending").length,
     [donations],
@@ -4320,7 +4379,12 @@ export default function App() {
         role={user?.role}
       />
       <div className="main bg-canvas flex-1">
-        <Header user={user} organizations={organizations} token={token} />
+        <Header
+          user={user}
+          organizations={organizations}
+          token={token}
+          onNavigate={handleNotificationNavigate}
+        />
         <div className="content">
           {page === "dashboard" && (
             <DashboardPage
@@ -4340,6 +4404,8 @@ export default function App() {
               organizations={organizations}
               loading={loading}
               onRefresh={() => fetchAll(token)}
+              navTarget={navTarget}
+              onNavConsumed={() => setNavTarget(null)}
             />
           )}
           {page === "campaigns" && (
@@ -4348,6 +4414,8 @@ export default function App() {
               campaigns={campaigns}
               loading={loading}
               onRefresh={() => fetchAll(token)}
+              navTarget={navTarget}
+              onNavConsumed={() => setNavTarget(null)}
             />
           )}
           {page === "pledges" && (
@@ -4360,6 +4428,8 @@ export default function App() {
               summary={pledgeSummary}
               loading={loading}
               onRefresh={() => fetchAll(token)}
+              navTarget={navTarget}
+              onNavConsumed={() => setNavTarget(null)}
             />
           )}
           {page === "donors" && (
