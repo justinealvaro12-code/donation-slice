@@ -691,8 +691,236 @@ function Sidebar({ page, setPage, pendingCount, role }) {
   );
 }
 
+/* ============================== notifications ============================== */
+function NotificationBell({ token }) {
+  const [items, setItems] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const containerRef = React.useRef(null);
+
+  const fetchNotifications = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/notifications", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load notifications");
+      const data = await res.json();
+      setItems(Array.isArray(data.items) ? data.items : []);
+      setUnreadCount(data.unread_count || 0);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 60000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const markRead = async (key) => {
+    setItems((prev) =>
+      prev.map((n) => (n.key === key ? { ...n, read: true } : n)),
+    );
+    setUnreadCount((c) => Math.max(c - 1, 0));
+    try {
+      await fetch(`/api/notifications/${encodeURIComponent(key)}/read`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (err) {
+      console.error(err);
+      fetchNotifications();
+    }
+  };
+
+  const markAllRead = async () => {
+    setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+    setUnreadCount(0);
+    try {
+      await fetch("/api/notifications/read-all", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (err) {
+      console.error(err);
+      fetchNotifications();
+    }
+  };
+
+  const typeIcon = {
+    donation_received: "receipts",
+    pledge_overdue: "alert",
+    campaign_goal_reached: "campaigns",
+  };
+
+  return (
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <button
+        className="icon-btn"
+        onClick={() => setOpen((o) => !o)}
+        style={{ position: "relative" }}
+      >
+        <Icon name="bell" size={20} />
+        {unreadCount > 0 && (
+          <span
+            style={{
+              position: "absolute",
+              top: -2,
+              right: -2,
+              background: "#dc2626",
+              color: "#fff",
+              borderRadius: "999px",
+              fontSize: 11,
+              fontWeight: 700,
+              minWidth: 16,
+              height: 16,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0 4px",
+              lineHeight: 1,
+            }}
+          >
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            right: 0,
+            top: "calc(100% + 8px)",
+            width: 360,
+            maxHeight: 420,
+            overflowY: "auto",
+            background: "#fff",
+            borderRadius: 10,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+            border: "1px solid #e5e7eb",
+            zIndex: 50,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "12px 16px",
+              borderBottom: "1px solid #f1f5f9",
+            }}
+          >
+            <strong style={{ fontSize: 14 }}>Notifications</strong>
+            {unreadCount > 0 && (
+              <button
+                className="link"
+                style={{ fontSize: 12 }}
+                onClick={markAllRead}
+              >
+                Mark all read
+              </button>
+            )}
+          </div>
+
+          {loading && items.length === 0 ? (
+            <div style={{ padding: 20, textAlign: "center", color: "#94a3b8" }}>
+              Loading...
+            </div>
+          ) : items.length === 0 ? (
+            <div style={{ padding: 20, textAlign: "center", color: "#94a3b8" }}>
+              No notifications.
+            </div>
+          ) : (
+            items.map((n) => (
+              <div
+                key={n.key}
+                onClick={() => !n.read && markRead(n.key)}
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  padding: "12px 16px",
+                  borderBottom: "1px solid #f8fafc",
+                  cursor: n.read ? "default" : "pointer",
+                  background: n.read ? "#fff" : "#f0f9ff",
+                }}
+              >
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    background: n.read ? "#f1f5f9" : "#dbeafe",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    color: n.read ? "#94a3b8" : "#2563eb",
+                  }}
+                >
+                  <Icon name={typeIcon[n.type] || "bell"} size={16} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{n.title}</div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "#64748b",
+                      marginTop: 2,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {n.message}
+                  </div>
+                  {n.created_at && (
+                    <div
+                      style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}
+                    >
+                      {formatDate(n.created_at)}
+                    </div>
+                  )}
+                </div>
+                {!n.read && (
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: "#2563eb",
+                      flexShrink: 0,
+                      marginTop: 4,
+                    }}
+                  />
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ============================== header ============================== */
-function Header({ user, organizations }) {
+function Header({ user, organizations, token }) {
   const org = organizations.find((o) => o.id === user?.organization_id);
   return (
     <header className="topbar">
@@ -701,9 +929,7 @@ function Header({ user, organizations }) {
         <span className="org-name">{org?.name || "Unknown Organization"}</span>
       </div>
       <div className="topbar-actions">
-        <button className="icon-btn">
-          <Icon name="bell" size={20} />
-        </button>
+        <NotificationBell token={token} />
         <div className="avatar">{user?.name?.[0] || "A"}</div>
       </div>
     </header>
@@ -4094,7 +4320,7 @@ export default function App() {
         role={user?.role}
       />
       <div className="main bg-canvas flex-1">
-        <Header user={user} organizations={organizations} />
+        <Header user={user} organizations={organizations} token={token} />
         <div className="content">
           {page === "dashboard" && (
             <DashboardPage
