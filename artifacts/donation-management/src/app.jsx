@@ -673,6 +673,14 @@ function Sidebar({ page, setPage, pendingCount, role }) {
   const visibleItems = NAV_ITEMS.filter(
     (item) => item.id !== "settings" || role === "administrator",
   );
+
+  // Same authenticated-user state the header/ProfileMenu reads from (the
+  // `role` prop is passed down from App()'s `user.role`) — single source
+  // of truth, never hard-coded. Formats "fundraising_staff" -> "Fundraising Staff".
+  const formattedRole = role
+    ? role.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
+    : null;
+
   return (
     <aside className="sidebar bg-sidebar text-white">
       <div className="sidebar-brand">
@@ -704,6 +712,11 @@ function Sidebar({ page, setPage, pendingCount, role }) {
           );
         })}
       </nav>
+      {formattedRole && (
+        <div className="sidebar-footer">
+          <span className="role-badge">{formattedRole}</span>
+        </div>
+      )}
     </aside>
   );
 }

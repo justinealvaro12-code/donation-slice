@@ -77,7 +77,24 @@ body {
   flex-direction: column;
   gap: 2px;
 }
+.sidebar-footer {
+  margin-top: auto;
+  padding: 14px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  justify-content: center;
+}
 
+.sidebar-footer .role-badge {
+  width: 100%;
+  max-width: 160px;
+  justify-content: center;
+  padding: 5px 12px;
+  font-size: 12px;
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
 .nav-item {
   display: flex;
   align-items: center;
