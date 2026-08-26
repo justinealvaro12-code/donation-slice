@@ -2205,7 +2205,17 @@ function RaisedVsGoalChart({ campaigns, highlightId }) {
     ),
     1,
   );
-
+  const highlightRef = React.useRef(null);
+  // Scroll the highlighted campaign into view so the user actually
+  // sees the yellow flash even if it's below the fold.
+  useEffect(() => {
+    if (highlightId && highlightRef.current) {
+      highlightRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }
+  }, [highlightId]);
   if (active.length === 0) {
     return (
       <div className="chart-empty">
@@ -2231,6 +2241,7 @@ function RaisedVsGoalChart({ campaigns, highlightId }) {
         return (
           <div
             key={c.id}
+            ref={isHighlighted ? highlightRef : null}
             className={classNames(
               "hbar-row",
               isHighlighted && "hbar-row-highlight",
