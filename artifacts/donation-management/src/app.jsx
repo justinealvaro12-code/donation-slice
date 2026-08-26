@@ -13,6 +13,23 @@ function decodeToken(token) {
   }
 }
 
+function buildAuthUser(token) {
+  const payload = decodeToken(token);
+  if (!payload) return null;
+
+  // Reject expired tokens immediately on the client
+  const now = Math.floor(Date.now() / 1000);
+  if (payload.exp && payload.exp < now) return null;
+
+  return {
+    id: payload.sub,
+    name: payload.name || null,
+    email: payload.email || null,
+    role: payload.role || null,
+    organization_id: payload.organization_id || null,
+  };
+}
+
 function formatCurrency(amount) {
   const num = Number(amount) || 0;
   return (
@@ -942,20 +959,31 @@ function NotificationBell({ token, onNavigate }) {
   );
 }
 /* ============================== profile menu ============================== */
-function ProfileMenu({ user, organizations, onPageChange }) {
+function ProfileMenu({ user, organizations, onPageChange, onLogout }) {
   const [open, setOpen] = useState(false);
   const containerRef = React.useRef(null);
 
   const org = organizations.find((o) => o.id === user?.organization_id);
 
-  // Future-proof: uses name/email when available, falls back to role
-  const displayName =
-    user?.name ||
-    (user?.role
-      ? user.role.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
-      : "User");
-  const email = user?.email;
-  const initial = user?.name?.[0] || user?.role?.[0]?.toUpperCase() || "A";
+  // Derive display values from authenticated user state
+  // Never hard-code — always use the authenticated user's data
+  const displayName = user?.name || null;
+  const email = user?.email || null;
+  const role = user?.role || null;
+
+  // Initial from name if available, otherwise from role, fallback to "?"
+  // Never permanently hardcoded as "A"
+  const initial = displayName
+    ? displayName[0].toUpperCase()
+    : role
+      ? role[0].toUpperCase()
+      : "?";
+
+  // Format role for display: "fundraising_staff" → "Fundraising Staff"
+  const formattedRole = role
+    ? role.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
+    : "Unknown Role";
+
   const orgName = org?.name || "Unknown Organization";
 
   // Close on outside click
@@ -987,10 +1015,9 @@ function ProfileMenu({ user, organizations, onPageChange }) {
     onPageChange(page);
   };
 
-  const handleLogout = () => {
+  const handleLogoutClick = () => {
     setOpen(false);
-    localStorage.removeItem("giving_token");
-    window.location.reload();
+    onLogout?.();
   };
 
   return (
@@ -1009,8 +1036,16 @@ function ProfileMenu({ user, organizations, onPageChange }) {
       {open && (
         <div className="profile-dropdown" role="menu" aria-label="Profile menu">
           <div className="profile-dropdown-header">
-            <div className="profile-dropdown-name">{displayName}</div>
+            {displayName ? (
+              <div className="profile-dropdown-name">{displayName}</div>
+            ) : (
+              <div className="profile-dropdown-name">{formattedRole}</div>
+            )}
             {email && <div className="profile-dropdown-email">{email}</div>}
+            {/* Role is always displayed as a required badge */}
+            <div className="profile-dropdown-role">
+              <span className="role-badge">{formattedRole}</span>
+            </div>
             <div className="profile-dropdown-org">{orgName}</div>
           </div>
           <div className="profile-dropdown-divider" />
@@ -1034,7 +1069,7 @@ function ProfileMenu({ user, organizations, onPageChange }) {
           <button
             className="profile-dropdown-item profile-dropdown-item-danger"
             role="menuitem"
-            onClick={handleLogout}
+            onClick={handleLogoutClick}
           >
             <span>Log out</span>
           </button>
@@ -1044,7 +1079,14 @@ function ProfileMenu({ user, organizations, onPageChange }) {
   );
 }
 /* ============================== header ============================== */
-function Header({ user, organizations, token, onNavigate, onPageChange }) {
+function Header({
+  user,
+  organizations,
+  token,
+  onNavigate,
+  onPageChange,
+  onLogout,
+}) {
   const org = organizations.find((o) => o.id === user?.organization_id);
   return (
     <header className="topbar">
@@ -1058,6 +1100,7 @@ function Header({ user, organizations, token, onNavigate, onPageChange }) {
           user={user}
           organizations={organizations}
           onPageChange={onPageChange}
+          onLogout={onLogout}
         />
       </div>
     </header>
@@ -4411,7 +4454,6 @@ function SettingsPage({ token, role }) {
     </div>
   );
 }
-
 /* ============================== app ============================== */
 export default function App() {
   const [page, setPage] = useState("dashboard");
@@ -4425,6 +4467,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [navTarget, setNavTarget] = useState(null);
+
+  const isAuthenticated = Boolean(token && user);
 
   const fetchAll = useCallback(
     async (currentToken) => {
@@ -4449,6 +4493,16 @@ export default function App() {
         setOrganization(org || null);
       } catch (err) {
         console.error("Fetch error:", err);
+        // If the API returns 401, the token is invalid or expired.
+        // Clear the auth state and force re-login.
+        if (
+          err.status === 401 ||
+          (err.message && err.message.includes("401"))
+        ) {
+          localStorage.removeItem("giving_token");
+          setToken("");
+          setUser(null);
+        }
       } finally {
         setLoading(false);
       }
@@ -4459,9 +4513,16 @@ export default function App() {
   useEffect(() => {
     const saved = localStorage.getItem("giving_token");
     if (saved) {
-      setToken(saved);
-      setUser(decodeToken(saved));
-      fetchAll(saved);
+      const authUser = buildAuthUser(saved);
+      if (authUser) {
+        setToken(saved);
+        setUser(authUser);
+        fetchAll(saved);
+      } else {
+        // Token expired or malformed — clean up
+        localStorage.removeItem("giving_token");
+        setLoading(false);
+      }
     } else {
       setLoading(false);
     }
@@ -4469,13 +4530,23 @@ export default function App() {
 
   const handleTokenPaste = (e) => {
     const val = e.target.value.trim();
-    setToken(val);
-    if (val) {
+    if (!val) return;
+    const authUser = buildAuthUser(val);
+    if (authUser) {
+      setToken(val);
+      setUser(authUser);
       localStorage.setItem("giving_token", val);
-      setUser(decodeToken(val));
       fetchAll(val);
     }
   };
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem("giving_token");
+    setToken("");
+    setUser(null);
+    setPage("dashboard");
+    window.location.reload();
+  }, []);
 
   const handleNotificationNavigate = (target) => {
     setPage(target.page);
@@ -4488,7 +4559,7 @@ export default function App() {
   );
   const organizations = organization ? [organization] : [];
 
-  if (!token) {
+  if (!isAuthenticated) {
     return (
       <div className="login-screen">
         <div className="login-card">
@@ -4526,6 +4597,7 @@ export default function App() {
           token={token}
           onNavigate={handleNotificationNavigate}
           onPageChange={setPage}
+          onLogout={handleLogout}
         />
         <div className="content">
           {page === "dashboard" && (
