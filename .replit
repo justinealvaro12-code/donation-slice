@@ -3,7 +3,11 @@ modules = ["nodejs-24", "python-3.11"]
 [deployment]
 router = "application"
 deploymentTarget = "autoscale"
-run = ["node", "artifacts/donation-management/imported-repository/backend/src/server.js"]
+build = ["pnpm", "run", "build"]
+run = [
+  "node",
+  "artifacts/donation-management/imported-repository/backend/src/server.js",
+]
 
 [deployment.postBuild]
 args = ["pnpm", "store", "prune"]
