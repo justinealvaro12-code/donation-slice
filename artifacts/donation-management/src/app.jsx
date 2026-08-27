@@ -3,33 +3,6 @@ import { api } from "./api.js";
 import "./App.css";
 
 /* ============================== helpers ============================== */
-function decodeToken(token) {
-  try {
-    const payload = token.split(".")[1];
-    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
-function buildAuthUser(token) {
-  const payload = decodeToken(token);
-  if (!payload) return null;
-
-  // Reject expired tokens immediately on the client
-  const now = Math.floor(Date.now() / 1000);
-  if (payload.exp && payload.exp < now) return null;
-
-  return {
-    id: payload.sub,
-    name: payload.name || null,
-    email: payload.email || null,
-    role: payload.role || null,
-    organization_id: payload.organization_id || null,
-  };
-}
-
 function formatCurrency(amount) {
   const num = Number(amount) || 0;
   return (
@@ -1055,10 +1028,6 @@ function ProfileMenu({ user, organizations, onPageChange, onLogout }) {
               <div className="profile-dropdown-name">{formattedRole}</div>
             )}
             {email && <div className="profile-dropdown-email">{email}</div>}
-            {/* Role is always displayed as a required badge */}
-            <div className="profile-dropdown-role">
-              <span className="role-badge">{formattedRole}</span>
-            </div>
             <div className="profile-dropdown-org">{orgName}</div>
           </div>
           <div className="profile-dropdown-divider" />
@@ -4467,6 +4436,111 @@ function SettingsPage({ token, role }) {
     </div>
   );
 }
+/* ============================== login page ============================== */
+function LoginPage({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
+      setError("Please enter both your email and password.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await onLogin(trimmedEmail, password);
+      // On success, the parent (App) swaps this screen out for the
+      // dashboard — nothing left to do here.
+    } catch (err) {
+      // Never surface backend internals — the server already returns a
+      // generic "Invalid email or password" message for bad credentials.
+      setError(err.message || "Unable to sign in. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="login-screen">
+      <div className="login-card">
+        <div className="brand-logo-lg">
+          <Icon name="donations" size={32} />
+        </div>
+        <h2>Donation Management</h2>
+        <p>Sign in to your account</p>
+
+        {error && (
+          <div className="login-error" role="alert">
+            {error}
+          </div>
+        )}
+
+        <form className="login-form" onSubmit={handleSubmit} noValidate>
+          <div className="form-group">
+            <label htmlFor="login-email">Email</label>
+            <input
+              id="login-email"
+              type="email"
+              autoComplete="username"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoFocus
+              disabled={submitting}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="login-password">Password</label>
+            <div className="login-password-field">
+              <input
+                id="login-password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={submitting}
+              />
+              <button
+                type="button"
+                className="login-password-toggle"
+                onClick={() => setShowPassword((v) => !v)}
+                tabIndex={-1}
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="btn btn-primary login-submit"
+            disabled={submitting}
+          >
+            {submitting ? (
+              <>
+                <span className="login-spinner" />
+                Signing in…
+              </>
+            ) : (
+              "Log in"
+            )}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /* ============================== app ============================== */
 export default function App() {
   const [page, setPage] = useState("dashboard");
@@ -4523,34 +4597,45 @@ export default function App() {
     [token],
   );
 
+  // Restore session on startup. We never trust a decoded JWT on its own —
+  // the backend (/api/auth/me) is the only source of truth for whether a
+  // stored token is still valid, so a tampered or expired token can't
+  // fake its way into an authenticated state.
   useEffect(() => {
     const saved = localStorage.getItem("giving_token");
-    if (saved) {
-      const authUser = buildAuthUser(saved);
-      if (authUser) {
+    if (!saved) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.getMe(saved);
+        if (cancelled) return;
         setToken(saved);
-        setUser(authUser);
+        setUser(res.user);
         fetchAll(saved);
-      } else {
-        // Token expired or malformed — clean up
+      } catch {
+        if (cancelled) return;
+        // Token invalid or expired — clear it and fall back to LoginPage.
         localStorage.removeItem("giving_token");
         setLoading(false);
       }
-    } else {
-      setLoading(false);
-    }
-  }, [fetchAll]);
+    })();
 
-  const handleTokenPaste = (e) => {
-    const val = e.target.value.trim();
-    if (!val) return;
-    const authUser = buildAuthUser(val);
-    if (authUser) {
-      setToken(val);
-      setUser(authUser);
-      localStorage.setItem("giving_token", val);
-      fetchAll(val);
-    }
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleLogin = async (email, password) => {
+    const res = await api.login(email, password);
+    localStorage.setItem("giving_token", res.token);
+    setToken(res.token);
+    setUser(res.user);
+    fetchAll(res.token);
   };
 
   const handleLogout = useCallback(() => {
@@ -4573,26 +4658,7 @@ export default function App() {
   const organizations = organization ? [organization] : [];
 
   if (!isAuthenticated) {
-    return (
-      <div className="login-screen">
-        <div className="login-card">
-          <div className="brand-logo-lg">
-            <Icon name="donations" size={32} />
-          </div>
-          <h2>Donation Management</h2>
-          <p>Paste your platform JWT to continue</p>
-          <input
-            type="text"
-            placeholder="eyJhbGciOiJIUzI1NiIs..."
-            onChange={handleTokenPaste}
-            autoFocus
-          />
-          <p className="login-hint">
-            Run <code>npm run seed</code> in your backend to generate a token.
-          </p>
-        </div>
-      </div>
-    );
+    return <LoginPage onLogin={handleLogin} />;
   }
 
   return (

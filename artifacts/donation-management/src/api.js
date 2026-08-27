@@ -28,6 +28,11 @@ async function request(path, { method = 'GET', token, body } = {}) {
 }
 
 export const api = {
+  // Auth
+  login: (email, password) =>
+    request('/auth/login', { method: 'POST', body: { email, password } }),
+  getMe: (token) => request('/auth/me', { token }),
+
   listDonations: (token, params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return request(`/donations${qs ? `?${qs}` : ''}`, { token });

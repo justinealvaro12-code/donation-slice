@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const { authenticate } = require("./middleware/auth");
+const authRouter = require("./routes/auth");
 const donationsRouter = require("./routes/donations");
 const donorsRouter = require("./routes/donors");
 const receiptsRouter = require("./routes/receipts");
@@ -20,6 +21,11 @@ function createApp() {
   app.get("/api/healthz", (req, res) => {
     res.status(200).json({ status: "ok" });
   });
+  // Auth routes are mounted WITHOUT the global `authenticate` gate —
+  // POST /login must be reachable by anyone with credentials, and
+  // GET /me applies `authenticate` itself (see routes/auth.js) so it can
+  // return a precise 401 instead of the generic middleware message.
+  app.use("/api/auth", authRouter);
   // Protected API routes - authenticate is applied per-router now,
   // not globally, so it never blocks health checks or static frontend
   // serving.

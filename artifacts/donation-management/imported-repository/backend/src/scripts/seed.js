@@ -12,6 +12,7 @@ if (!process.env.DATABASE_URL) {
   );
 }
 const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
 const { pool } = require("../db");
 const settingsRepository = require("../repositories/settingsRepository");
 
@@ -23,6 +24,12 @@ const ROLES = [
   "administrator",
 ];
 const SEED_ORG_NAMES = ["Org A Non-Profit", "Org B Non-Profit"];
+
+// Development-only credential — every seeded account (both orgs, all
+// roles) gets this same password so anyone can log in and try each
+// role. Never used outside local/dev seeding, and never hard-coded into
+// frontend code.
+const DEV_PASSWORD = "ChangeMe123!";
 
 // Matches the mockup: bank_transfer/cash/check/online on by default,
 // card/other off.
@@ -96,22 +103,32 @@ async function seed() {
   );
 
   const tokens = {};
+  const credentials = [];
+
+  // Same salt round count for every seeded user — bcrypt.hash() is run
+  // once per user (not shared) so each row gets its own salt even though
+  // they all hash the same DEV_PASSWORD.
+  const devPasswordHash = await bcrypt.hash(DEV_PASSWORD, 10);
 
   for (const [label, org] of [
-    ["orgA", orgA.rows[0]],
-    ["orgB", orgB.rows[0]],
+    ["orga", orgA.rows[0]],
+    ["orgb", orgB.rows[0]],
   ]) {
     for (const role of ROLES) {
-      const userResult = await pool.query(
-        `INSERT INTO users (organization_id, email, role) VALUES ($1, $2, $3) RETURNING *`,
-        [org.id, `${role}@${label}.example.com`, role],
-      );
-      const user = userResult.rows[0];
-
-      // Generate a display name from the role for the JWT
+      // Generate a display name from the role (e.g. "administrator" ->
+      // "Administrator") — used both as the users.name column and as
+      // the JWT's display name claim.
       const displayName = role
         .replace(/_/g, " ")
         .replace(/\b\w/g, (l) => l.toUpperCase());
+      const email = `${role}@${label}.example.com`;
+
+      const userResult = await pool.query(
+        `INSERT INTO users (organization_id, email, role, name, password_hash)
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [org.id, email, role, displayName, devPasswordHash],
+      );
+      const user = userResult.rows[0];
 
       const token = jwt.sign(
         {
@@ -125,6 +142,7 @@ async function seed() {
         { expiresIn: "7d" },
       );
       tokens[`${label}_${role}`] = token;
+      credentials.push({ email, password: DEV_PASSWORD });
     }
   }
 
@@ -167,7 +185,20 @@ async function seed() {
   console.log("\n=== Seed complete ===\n");
   console.log("Org A id:", orgA.rows[0].id, "| Donor A id:", donorA.rows[0].id);
   console.log("Org B id:", orgB.rows[0].id, "| Donor B id:", donorB.rows[0].id);
-  console.log("\n=== JWTs (use as: Authorization: Bearer <token>) ===\n");
+  console.log(
+    `\n=== Login credentials (all seeded accounts use password: ${DEV_PASSWORD}) ===\n`,
+  );
+  for (const { email } of credentials) {
+    console.log(`  ${email}`);
+  }
+  console.log(
+    "\nLog in with any of the above emails and the password shown, e.g.:",
+  );
+  console.log(`  email:    administrator@orga.example.com`);
+  console.log(`  password: ${DEV_PASSWORD}`);
+  console.log(
+    "\n=== Dev JWTs (not needed for normal login; kept for scripting/tests) ===\n",
+  );
   for (const [key, token] of Object.entries(tokens)) {
     console.log(`${key}:\n${token}\n`);
   }
