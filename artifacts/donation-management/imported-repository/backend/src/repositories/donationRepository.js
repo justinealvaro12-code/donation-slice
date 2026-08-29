@@ -99,8 +99,8 @@ async function confirm(organizationId, userId, donationId) {
 
     const updateResult = await client.query(
       `UPDATE donation_donations SET status = 'confirmed', updated_by = $1, updated_at = now()
-       WHERE id = $2 RETURNING *`,
-      [userId, donationId],
+       WHERE id = $2 AND organization_id = $3 RETURNING *`,
+      [userId, donationId, organizationId],
     );
 
     // Pledge fulfillment: a donation only counts toward a pledge once it's
@@ -167,8 +167,8 @@ async function refund(organizationId, userId, donationId) {
 
     const updateResult = await client.query(
       `UPDATE donation_donations SET status = 'refunded', updated_by = $1, updated_at = now()
-       WHERE id = $2 RETURNING *`,
-      [userId, donationId],
+       WHERE id = $2 AND organization_id = $3 RETURNING *`,
+      [userId, donationId, organizationId],
     );
 
     // Reverse the fulfillment credit this donation added back at confirm
@@ -190,8 +190,8 @@ async function refund(organizationId, userId, donationId) {
 
     await client.query(
       `UPDATE donation_receipts SET status = 'voided', updated_by = $1, updated_at = now()
-       WHERE donation_id = $2 AND status = 'issued'`,
-      [userId, donationId],
+       WHERE donation_id = $2 AND organization_id = $3 AND status = 'issued'`,
+      [userId, donationId, organizationId],
     );
 
     await client.query("COMMIT");
