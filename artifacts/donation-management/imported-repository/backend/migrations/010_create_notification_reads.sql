@@ -1,4 +1,4 @@
-CREATE TABLE donation_notification_reads (
+CREATE TABLE IF NOT EXISTS donation_notification_reads (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL,
   user_id UUID NOT NULL,
@@ -7,5 +7,5 @@ CREATE TABLE donation_notification_reads (
   UNIQUE (organization_id, user_id, notification_key)
 );
 
-CREATE INDEX idx_notification_reads_lookup
+CREATE INDEX IF NOT EXISTS idx_notification_reads_lookup
   ON donation_notification_reads (organization_id, user_id);

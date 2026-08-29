@@ -75,6 +75,7 @@ Based on the intended users defined in SCOPING.md:
 | `donation.void` | No | No | Yes | Yes | Yes |
 | `receipt.view` | Yes | Yes | Yes | Yes | Yes |
 | `receipt.void` | No | No | Yes | Yes | Yes |
+| `report.view` | Yes | Yes | Yes | Yes | Yes |
 
 **Least-privilege notes:**
 - Viewer has no write permissions at all — a pure read role for oversight/reporting.

@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { requirePermission } = require('../middleware/requirePermission');
 const organizationRepository = require('../repositories/organizationRepository');
 
 // GET /api/organizations/me — view your own organization
@@ -15,7 +16,7 @@ router.get('/me', async (req, res) => {
 });
 
 // PUT /api/organizations/me — update your own organization
-router.put('/me', async (req, res) => {
+router.put('/me', requirePermission('settings.manage'), async (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: { code: 'VALIDATION_FAILED', message: 'name is required' } });

@@ -20,10 +20,5 @@ ALTER TABLE users
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
--- Case-insensitive lookup by email is how login works; enforce
--- uniqueness the same way to prevent duplicate accounts differing only
--- by case.
-CREATE UNIQUE INDEX IF NOT EXISTS ux_users_email_lower
-  ON users (lower(email));
 
 COMMIT;

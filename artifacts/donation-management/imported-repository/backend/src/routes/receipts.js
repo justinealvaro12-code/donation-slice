@@ -1,12 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const { pool } = require("../db");
+const { requirePermission } = require("../middleware/requirePermission");
 const receiptRepository = require("../repositories/receiptRepository");
 const donationRepository = require("../repositories/donationRepository");
 const settingsRepository = require("../repositories/settingsRepository");
 
 // GET /api/receipts
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("receipt.view"), async (req, res) => {
   try {
     const rows = await receiptRepository.findByOrganization(
       req.auth.organization_id,
@@ -23,7 +24,7 @@ router.get("/", async (req, res) => {
 });
 
 // GET /api/receipts/:id
-router.get("/:id", async (req, res) => {
+router.get("/:id", requirePermission("receipt.view"), async (req, res) => {
   try {
     const receipt = await receiptRepository.findById(
       req.params.id,
@@ -45,7 +46,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // POST /api/receipts
-router.post("/", async (req, res) => {
+router.post("/", requirePermission("receipt.create"), async (req, res) => {
   try {
     const { donation_id } = req.body;
     if (!donation_id)
@@ -176,4 +177,32 @@ router.post("/", async (req, res) => {
       });
   }
 });
+
+// POST /api/receipts/:id/void
+router.post("/:id/void", requirePermission("receipt.void"), async (req, res) => {
+  try {
+    const receipt = await donationRepository.voidReceipt(
+      req.auth.organization_id,
+      req.auth.user_id || req.auth.id,
+      req.params.id,
+    );
+    if (!receipt) {
+      return res.status(404).json({
+        error: {
+          code: "NOT_FOUND",
+          message: "Receipt not found or already voided",
+        },
+      });
+    }
+    res.json(receipt);
+  } catch (err) {
+    console.error(err);
+    res
+      .status(500)
+      .json({
+        error: { code: "INTERNAL_ERROR", message: "Failed to void receipt" },
+      });
+  }
+});
+
 module.exports = router;

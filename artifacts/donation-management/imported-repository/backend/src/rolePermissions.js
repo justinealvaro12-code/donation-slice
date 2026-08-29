@@ -9,35 +9,39 @@
 // new roles, only change what each of these five roles can do for their org.
 
 const ROLE_PERMISSIONS = {
-  viewer: ['donor.view', 'donation.view', 'receipt.view', 'campaign.view', 'pledge.view'],
+  viewer: ['donor.view', 'donation.view', 'receipt.view', 'campaign.view', 'pledge.view', 'report.view'],
   fundraising_staff: [
     'donor.view', 'donor.create', 'donor.update',
     'donation.view', 'donation.create',
     'receipt.view',
     'campaign.view', 'campaign.create', 'campaign.update',
     'pledge.view', 'pledge.create', 'pledge.update',
+    'report.view',
   ],
   finance_staff: [
     'donor.view',
     'donation.view', 'donation.create', 'donation.confirm', 'donation.refund', 'donation.void',
-    'receipt.view', 'receipt.void',
+    'receipt.view', 'receipt.create', 'receipt.void',
     'campaign.view',
     'pledge.view',
+    'report.view',
   ],
   manager: [
     'donor.view', 'donor.create', 'donor.update', 'donor.delete',
     'donation.view', 'donation.create', 'donation.confirm', 'donation.refund', 'donation.void', 'donation.delete',
-    'receipt.view', 'receipt.void',
+    'receipt.view', 'receipt.create', 'receipt.void',
     'campaign.view', 'campaign.create', 'campaign.update', 'campaign.delete',
     'pledge.view', 'pledge.create', 'pledge.update', 'pledge.delete',
+    'report.view',
   ],
   administrator: [
   'donor.view', 'donor.create', 'donor.update', 'donor.delete',
   'donation.view', 'donation.create', 'donation.confirm', 'donation.refund', 'donation.void', 'donation.delete',
-  'receipt.view', 'receipt.void',
+  'receipt.view', 'receipt.create', 'receipt.void',
   'campaign.view', 'campaign.create', 'campaign.update', 'campaign.delete',
   'pledge.view', 'pledge.create', 'pledge.update', 'pledge.delete',
   'settings.view', 'settings.manage',
+  'report.view',
 ],
 };
 
