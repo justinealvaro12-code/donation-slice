@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
 const path = require("path");
 const { authenticate } = require("./middleware/auth");
 const authRouter = require("./routes/auth");
@@ -14,7 +15,8 @@ const notificationsRouter = require("./routes/notifications");
 function createApp() {
   const app = express();
   app.use(express.json());
-  app.use(cors({ origin: true, credentials: true }));
+  app.use(helmet({ contentSecurityPolicy: false }));
+  app.use(cors({ origin: true }));
   // Health check - must respond without requiring auth, and before
   // authenticate is applied anywhere, so Replit's deployment healthcheck
   // (GET /api/healthz) always succeeds regardless of token state.
