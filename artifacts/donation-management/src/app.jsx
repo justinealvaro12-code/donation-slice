@@ -622,29 +622,93 @@ function DonorFormModal({ token, donor, onClose, onSave }) {
   );
 }
 /* ============================== sidebar ============================== */
+// `permission: null` means every authenticated user sees the item
+// regardless of role (Dashboard is just an aggregate view, and
+// GET /api/organizations/me has no permission requirement on the
+// backend — every role can view its own org). Every other item's
+// `permission` is the exact string the backend's requirePermission()
+// checks for that page's GET endpoint(s) — see backend/src/routes/*.js —
+// so a nav item only appears when the signed-in user could actually load
+// that page's data. This is the single list; nothing here is duplicated
+// per role.
 const NAV_ITEMS = [
-  { id: "dashboard", label: "Dashboard", icon: "dashboard", disabled: false },
-  { id: "donors", label: "Donors", icon: "donors", disabled: false },
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    icon: "dashboard",
+    disabled: false,
+    permission: null,
+  },
+  {
+    id: "donors",
+    label: "Donors",
+    icon: "donors",
+    disabled: false,
+    permission: "donor.view",
+  },
   {
     id: "organizations",
     label: "My Organization",
     icon: "settings",
     disabled: false,
+    permission: null,
   },
-  { id: "campaigns", label: "Campaigns", icon: "campaigns", disabled: false },
-  { id: "pledges", label: "Pledges", icon: "pledges", disabled: false },
-  { id: "donations", label: "Donations", icon: "donations", disabled: false },
-  { id: "receipts", label: "Receipts", icon: "receipts", disabled: false },
-  { id: "reports", label: "Reports", icon: "reports", disabled: false },
-  { id: "settings", label: "Settings", icon: "settings", disabled: false },
+  {
+    id: "campaigns",
+    label: "Campaigns",
+    icon: "campaigns",
+    disabled: false,
+    permission: "campaign.view",
+  },
+  {
+    id: "pledges",
+    label: "Pledges",
+    icon: "pledges",
+    disabled: false,
+    permission: "pledge.view",
+  },
+  {
+    id: "donations",
+    label: "Donations",
+    icon: "donations",
+    disabled: false,
+    permission: "donation.view",
+  },
+  {
+    id: "receipts",
+    label: "Receipts",
+    icon: "receipts",
+    disabled: false,
+    permission: "receipt.view",
+  },
+  {
+    id: "reports",
+    label: "Reports",
+    icon: "reports",
+    disabled: false,
+    permission: "report.view",
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: "settings",
+    disabled: false,
+    permission: "settings.view",
+  },
 ];
 
-function Sidebar({ page, setPage, pendingCount, role }) {
-  // Settings is admin-only on the backend (settings.view/settings.manage
-  // permissions) — hide the nav item for anyone who isn't an administrator
-  // so non-admins don't land on a page that just 403s.
+function Sidebar({ page, setPage, pendingCount, role, permissions }) {
+  // Permission-driven visibility, not a role-name check: an item shows up
+  // only if the signed-in user's *actual* permission grants (as computed
+  // by the backend from organization_role_permissions, the same table an
+  // admin edits in Settings > Roles & Permissions) include what that
+  // page's API requires. This still isn't the security boundary — every
+  // one of these endpoints independently re-checks the permission via
+  // requirePermission() server-side — it just keeps the menu itself
+  // honest about what will and won't work.
+  const perms = permissions || [];
   const visibleItems = NAV_ITEMS.filter(
-    (item) => item.id !== "settings" || role === "administrator",
+    (item) => item.permission === null || perms.includes(item.permission),
   );
 
   // Same authenticated-user state the header/ProfileMenu reads from (the
@@ -4125,7 +4189,8 @@ function RolePermissionMatrixModal({ token, role, onClose, onSaved }) {
 }
 
 /* ============================== settings page ============================== */
-function SettingsPage({ token, role }) {
+function SettingsPage({ token, permissions }) {
+  const canViewSettings = (permissions || []).includes("settings.view");
   const [tab, setTab] = useState("roles");
 
   /* ---- roles ---- */
@@ -4234,17 +4299,17 @@ function SettingsPage({ token, role }) {
   };
 
   useEffect(() => {
-    // Non-admins can't call any of these endpoints (backend requires
-    // settings.view / settings.manage, held only by the administrator
-    // role) — skip the fetches entirely instead of racing to a 403.
-    if (role !== "administrator") return;
+    // Whoever lacks settings.view can't call any of these endpoints
+    // (backend requires settings.view/settings.manage) — skip the
+    // fetches entirely instead of racing to a 403.
+    if (!canViewSettings) return;
     if (tab === "roles" && roles.length === 0) loadRoles();
     if (tab === "channels" && channels.length === 0) loadChannels();
     if (tab === "receipt" && receiptSettings === null) loadReceiptSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, role]);
+  }, [tab, canViewSettings]);
 
-  if (role !== "administrator") {
+  if (!canViewSettings) {
     return (
       <div className="page">
         <div className="card empty-state">
@@ -4553,6 +4618,7 @@ export default function App() {
   const [organization, setOrganization] = useState(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [permissions, setPermissions] = useState([]);
   const [navTarget, setNavTarget] = useState(null);
 
   const isAuthenticated = Boolean(token && user);
@@ -4589,6 +4655,7 @@ export default function App() {
           localStorage.removeItem("giving_token");
           setToken("");
           setUser(null);
+          setPermissions([]);
         }
       } finally {
         setLoading(false);
@@ -4615,6 +4682,7 @@ export default function App() {
         if (cancelled) return;
         setToken(saved);
         setUser(res.user);
+        setPermissions(Array.isArray(res.permissions) ? res.permissions : []);
         fetchAll(saved);
       } catch {
         if (cancelled) return;
@@ -4635,6 +4703,7 @@ export default function App() {
     localStorage.setItem("giving_token", res.token);
     setToken(res.token);
     setUser(res.user);
+    setPermissions(Array.isArray(res.permissions) ? res.permissions : []);
     fetchAll(res.token);
   };
 
@@ -4642,7 +4711,11 @@ export default function App() {
     localStorage.removeItem("giving_token");
     setToken("");
     setUser(null);
+    setPermissions([]);
     setPage("dashboard");
+    // Full reload, not just state resets: guarantees User B never inherits
+    // a stray render of User A's sidebar/permissions/page state, even for
+    // a single frame, on the same tab.
     window.location.reload();
   }, []);
 
@@ -4668,6 +4741,7 @@ export default function App() {
         setPage={setPage}
         pendingCount={pendingCount}
         role={user?.role}
+        permissions={permissions}
       />
       <div className="main bg-canvas flex-1">
         <Header
@@ -4761,7 +4835,7 @@ export default function App() {
             />
           )}
           {page === "settings" && (
-            <SettingsPage token={token} role={user?.role} />
+            <SettingsPage token={token} permissions={permissions} />
           )}
           {page !== "dashboard" &&
             page !== "donations" &&
